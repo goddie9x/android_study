@@ -1,16 +1,19 @@
 package com.god.study;
 
 import android.annotation.SuppressLint;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.preference.PreferenceManager;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.TextView;
 
 import java.util.Collections;
 import java.util.Vector;
+import java.util.prefs.Preferences;
 
 public class MainActivity extends AppCompatActivity {
     private final String STATE = MainActivity.class.getSimpleName();
@@ -20,26 +23,32 @@ public class MainActivity extends AppCompatActivity {
     private final Vector<CalState> history = new Vector<>();
     private final CalState currentCalState = new CalState();
     private String crrOperator;
+    private SharedPreferences sharedPreferences;
+    private SharedPreferences.Editor editor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        editor = sharedPreferences.edit();
+        int amountHisCalSate = sharedPreferences.getInt("amountHisCalState",0);
+
         setContentView(R.layout.activity_main);
         expressLabel = (TextView) findViewById(R.id.cal_express_label);
         outputLabel = (TextView) findViewById(R.id.output_label);
         overridePendingTransition(androidx.navigation.ui.R.anim.nav_default_enter_anim,R.anim.zoom_in);
 
-        if (savedInstanceState != null) {
-            savedInstanceState.getBoolean("isHaveToClearInput");
-            savedInstanceState.getString("crrOperator");
-            CalState[] prevHistory = (CalState[]) savedInstanceState.getParcelableArray("history");
-            Collections.addAll(history, prevHistory);
-            CalState backUpstate = savedInstanceState.getParcelable("currentCalState");
-            setExpress(backUpstate.express);
-            setValue(backUpstate.value);
+        if(amountHisCalSate>0){
+            for(int i = 0;i< amountHisCalSate;i++){
+                double crrValue = sharedPreferences.getFloat("value"+i,0);
+                String crrExpress = sharedPreferences.getString("express"+i, "");
+                CalState crrCal = new CalState(crrExpress,crrValue);
+                history.add(crrCal);
+            }
         }
-        Button historyBtn = (Button) findViewById(R.id.history);
         initHistoryFragment();
+
+        Button historyBtn = (Button) findViewById(R.id.history);
         historyBtn.setOnClickListener(v -> HistoryDialogFragment
                 .showHistoryDialogFragment(getSupportFragmentManager(),
                         history.toArray(new CalState[history.size()])));
@@ -56,10 +65,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-        outState.putBoolean("isHaveToClearInput", isHaveToClearInput);
-        outState.putString("crrOperator", crrOperator);
-        outState.putParcelableArray("history", history.toArray(new CalState[history.size()]));
-        outState.putParcelable("currentCalState", currentCalState);
+        int amountCalHis = history.size();
+        editor.putInt("amountHisCalState",amountCalHis);
+        for(int i = 0;i<amountCalHis;i++){
+            CalState crrCal = history.elementAt(i);
+            editor.putFloat("value"+i, (float) crrCal.value);
+            editor.putString("express"+i,crrCal.express);
+        }
+        editor.commit();
     }
 
     private void initHistoryFragment() {
@@ -81,14 +94,11 @@ public class MainActivity extends AppCompatActivity {
         initEventForClearAllBtn();
         initEventForClearResultBtn();
         initEventForClearSingleBtn();
+        initEventForOneHandOperatorsBtn();
         initEventForEqualBtn();
-        initEventForReverseBtn();
-        initEventForOppositeBtn();
-        initEventForSqrtBtn();
         initEventForNumbersBtn();
         initEventForTwoHandOperatorsBtn();
         initEventForDotBtn();
-
     }
 
     private void initEventForNumbersBtn() {
@@ -144,7 +154,11 @@ public class MainActivity extends AppCompatActivity {
             setValue(newValue);
         });
     }
-
+    private void initEventForOneHandOperatorsBtn(){
+        initEventForReverseBtn();
+        initEventForOppositeBtn();
+        initEventForSqrtBtn();
+    }
     private void initEventForTwoHandOperatorsBtn() {
         handleOperatorEventClick((Button) findViewById(R.id.div));
         handleOperatorEventClick((Button) findViewById(R.id.minus));
@@ -304,7 +318,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleMinusValue(double crrInputNumber) {
         setNewCalState(
-                currentCalState.value + "-"
+                currentCalState.getNormalizeValue() + "-"
                         + CalState.normalizeDoubleToString(crrInputNumber) + "=",
                 currentCalState.value - crrInputNumber
         );
@@ -314,7 +328,7 @@ public class MainActivity extends AppCompatActivity {
         String lastResultString = getInputText();
         double lastResult = Double.parseDouble(lastResultString);
         setNewCalState(
-                "-(" + lastResult + ")=",
+                "-(" + lastResultString + ")=",
                 -lastResult
         );
     }
@@ -326,7 +340,7 @@ public class MainActivity extends AppCompatActivity {
             outputLabel.setText("Invalid input");
         } else {
             setNewCalState(
-                    "v(" + lastResult + ")=",
+                    "v(" + lastResultString + ")=",
                     Math.sqrt(lastResult)
             );
         }
